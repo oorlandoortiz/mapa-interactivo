@@ -272,6 +272,59 @@ document.getElementById("zoom-reset").onclick = () => {
   vb = { x: 0, y: 0, w: 800, h: 500 };
   updateVB();
 };
+
+
+
+/* ================= PINCH TO ZOOM (iPad / Touch) ================= */
+let pointers = new Map();
+let lastPinchDistance = null;
+
+svg.addEventListener("pointerdown", e => {
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+});
+
+svg.addEventListener("pointerup", e => {
+  pointers.delete(e.pointerId);
+  lastPinchDistance = null;
+});
+
+svg.addEventListener("pointercancel", e => {
+  pointers.delete(e.pointerId);
+  lastPinchDistance = null;
+});
+
+svg.addEventListener("pointermove", e => {
+  if (!pointers.has(e.pointerId)) return;
+
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  // PINCH con 2 dedos
+  if (pointers.size === 2) {
+    const pts = Array.from(pointers.values());
+    const dx = pts[0].x - pts[1].x;
+    const dy = pts[0].y - pts[1].y;
+    const distance = Math.hypot(dx, dy);
+
+    if (lastPinchDistance) {
+      const zoomFactor = lastPinchDistance / distance;
+
+      const rect = svg.getBoundingClientRect();
+      const cx = ((pts[0].x + pts[1].x) / 2 - rect.left) / rect.width * vb.w + vb.x;
+      const cy = ((pts[0].y + pts[1].y) / 2 - rect.top) / rect.height * vb.h + vb.y;
+
+      vb.w *= zoomFactor;
+      vb.h *= zoomFactor;
+      vb.x = cx - vb.w / 2;
+      vb.y = cy - vb.h / 2;
+
+      updateVB();
+    }
+
+    lastPinchDistance = distance;
+  }
+});
+
+
 </script>
 
 </body>
