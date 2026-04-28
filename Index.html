@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Mapa interactivo – Activos v1.3</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<style>
+/* ================= BASE ================= */
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  background: #0f172a;
+  color: #e5e7eb;
+  display: flex;
+}
+
+/* ================= SIDEBAR ================= */
+#sidebar {
+  width: 280px;
+  min-width: 240px;
+  background: #020617;
+  padding: 14px;
+  border-right: 1px solid #1e293b;
+  overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  #sidebar {
+    width: 200px;
+    font-size: 13px;
+  }
+}
+
+/* ================= MAPA ================= */
+#map-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* ================= FILTROS ================= */
+#filters {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+  background: #020617;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+/* ================= ZOOM ================= */
+#zoom-controls {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#zoom-controls button {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  border: none;
+  background: #1e293b;
+  color: #fff;
+  font-size: 18px;
+}
+
+/* ================= SVG ================= */
+svg {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  user-select: none;
+}
+
+/* ================= ACTIVOS ================= */
+.asset {
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.asset:hover,
+.asset.selected {
+  filter:
+    drop-shadow(0 0 6px #ffffff)
+    drop-shadow(0 0 14px #38bdf8)
+    drop-shadow(0 0 26px #38bdf8);
+}
+
+/* ================= TOOLTIP ================= */
+#tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(2,6,23,0.95);
+  color: #e5e7eb;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  display: none;
+  z-index: 20;
+}
+</style>
+</head>
+
+<body>
+
+<div id="sidebar">
+  <h3>Detalle del activo</h3>
+  <div id="info">Selecciona un activo</div>
+</div>
+
+<div id="map-container">
+
+  <div id="filters">
+    <strong>Filtros</strong><br>
+    <label><input type="checkbox" checked data-filter="tablero"> Tableros</label><br>
+    <label><input type="checkbox" checked data-filter="emergencia"> Emergencia</label><br>
+    <label><input type="checkbox" checked data-filter="extintor"> Extintores</label><br>
+    <label><input type="checkbox" checked data-filter="ups"> UPS</label><br>
+    <label><input type="checkbox" checked data-filter="hvac"> HVAC</label>
+  </div>
+
+  <div id="zoom-controls">
+    <button id="zoom-in">+</button>
+    <button id="zoom-out">−</button>
+    <button id="zoom-reset">⛶</button>
+  </div>
+
+  <div id="tooltip"></div>
+
+  <svg id="map" viewBox="0 0 800 500">
+    <image href="plano.jpg" x="0" y="0" width="800" height="500" />
+    <g id="layer-tableros"></g>
+  </svg>
+
+</div>
+
+<script>
+/* ================= TABLEROS ================= */
+const tableros = [
+  { id: "TAB-01-D5", nombre: "Tablero Línea D5", x: 385, y: 300 },
+  { id: "TAB-02-S1", nombre: "Tablero Línea S1", x: 385, y: 270 },
+  { id: "TAB-03-S3", nombre: "Tablero Línea S3", x: 385, y: 250 },
+  { id: "TAB-04-R1", nombre: "Tablero Línea R1", x: 385, y: 230 },
+];
+
+/* ================= VARIABLES ================= */
+const svg = document.getElementById("map");
+const info = document.getElementById("info");
+const tooltip = document.getElementById("tooltip");
+const layerTableros = document.getElementById("layer-tableros");
+let selected = null;
+
+/* ================= RENDER ================= */
+const iconSize = 15;
+tableros.forEach(tab => {
+  const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
+  img.setAttribute("href", "electrico.png");
+  img.setAttribute("width", iconSize);
+  img.setAttribute("height", iconSize);
+  img.setAttribute("x", tab.x - iconSize / 2);
+  img.setAttribute("y", tab.y - iconSize / 2);
+  img.classList.add("asset", "tablero");
+
+  img.dataset.id = tab.id;
+  img.dataset.type = "Tablero eléctrico";
+  img.dataset.info = tab.nombre;
+
+  layerTableros.appendChild(img);
+});
+
+/* ================= INTERACCIÓN ================= */
+document.querySelectorAll(".asset").forEach(a => {
+
+  a.addEventListener("pointerdown", e => {
+    e.stopPropagation();
+    if (selected) selected.classList.remove("selected");
+    a.classList.add("selected");
+    selected = a;
+
+    info.innerHTML = `
+      <strong>${a.dataset.id}</strong><br>
+      ${a.dataset.type}<br><br>
+      ${a.dataset.info}
+    `;
+  });
+
+  a.addEventListener("pointermove", e => {
+    tooltip.style.display = "block";
+    tooltip.style.left = e.clientX + 8 + "px";
+    tooltip.style.top = e.clientY + 8 + "px";
+    tooltip.innerHTML = `
+      <strong>${a.dataset.id}</strong><br>
+      ${a.dataset.type}<br>
+      ${a.dataset.info}
+    `;
+  });
+
+  a.addEventListener("pointerleave", () => {
+    tooltip.style.display = "none";
+  });
+});
+
+/* ================= FILTROS ================= */
+document.querySelectorAll("[data-filter]").forEach(f => {
+  f.addEventListener("change", () => {
+    document.querySelectorAll("." + f.dataset.filter)
+      .forEach(el => el.style.display = f.checked ? "block" : "none");
+  });
+});
+
+/* ================= ZOOM / PAN (PC + TOUCH) ================= */
+let vb = { x: 0, y: 0, w: 800, h: 500 };
+const zoomStep = 0.2;
+let dragging = false;
+let start = { x: 0, y: 0 };
+
+function updateVB() {
+  svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+}
+
+svg.addEventListener("pointerdown", e => {
+  dragging = true;
+  start.x = e.clientX;
+  start.y = e.clientY;
+  svg.style.cursor = "grabbing";
+});
+
+window.addEventListener("pointermove", e => {
+  if (!dragging) return;
+  const dx = (start.x - e.clientX) * (vb.w / svg.clientWidth);
+  const dy = (start.y - e.clientY) * (vb.h / svg.clientHeight);
+  vb.x += dx;
+  vb.y += dy;
+  start.x = e.clientX;
+  start.y = e.clientY;
+  updateVB();
+});
+
+window.addEventListener("pointerup", () => {
+  dragging = false;
+  svg.style.cursor = "grab";
+});
+
+document.getElementById("zoom-in").onclick = () => {
+  vb.w *= 1 - zoomStep;
+  vb.h *= 1 - zoomStep;
+  updateVB();
+};
+
+document.getElementById("zoom-out").onclick = () => {
+  vb.w *= 1 + zoomStep;
+  vb.h *= 1 + zoomStep;
+  updateVB();
+};
+
+document.getElementById("zoom-reset").onclick = () => {
+  vb = { x: 0, y: 0, w: 800, h: 500 };
+  updateVB();
+};
+</script>
+
+</body>
+</html>
+``
