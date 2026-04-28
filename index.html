@@ -2,11 +2,10 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Mapa interactivo – Activos v1.3</title>
+<title>Mapa interactivo – Activos</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
 <style>
-/* ================= BASE ================= */
 html, body {
   width: 100%;
   height: 100%;
@@ -21,24 +20,16 @@ body {
   display: flex;
 }
 
-/* ================= SIDEBAR ================= */
+/* SIDEBAR */
 #sidebar {
-  width: 280px;
-  min-width: 240px;
+  width: 260px;
   background: #020617;
   padding: 14px;
   border-right: 1px solid #1e293b;
   overflow-y: auto;
 }
 
-@media (max-width: 900px) {
-  #sidebar {
-    width: 200px;
-    font-size: 13px;
-  }
-}
-
-/* ================= MAPA ================= */
+/* MAPA */
 #map-container {
   flex: 1;
   position: relative;
@@ -46,7 +37,7 @@ body {
   touch-action: none;
 }
 
-/* ================= FILTROS ================= */
+/* FILTROS */
 #filters {
   position: absolute;
   top: 10px;
@@ -58,7 +49,7 @@ body {
   font-size: 13px;
 }
 
-/* ================= ZOOM ================= */
+/* ZOOM */
 #zoom-controls {
   position: absolute;
   right: 14px;
@@ -79,7 +70,7 @@ body {
   font-size: 18px;
 }
 
-/* ================= SVG ================= */
+/* SVG */
 svg {
   width: 100%;
   height: 100%;
@@ -87,7 +78,7 @@ svg {
   user-select: none;
 }
 
-/* ================= ACTIVOS ================= */
+/* ACTIVOS */
 .asset {
   cursor: pointer;
   transition: filter 0.15s;
@@ -96,17 +87,16 @@ svg {
 .asset:hover,
 .asset.selected {
   filter:
-    drop-shadow(0 0 6px #ffffff)
+    drop-shadow(0 0 6px #fff)
     drop-shadow(0 0 14px #38bdf8)
     drop-shadow(0 0 26px #38bdf8);
 }
 
-/* ================= TOOLTIP ================= */
+/* TOOLTIP */
 #tooltip {
   position: absolute;
   pointer-events: none;
   background: rgba(2,6,23,0.95);
-  color: #e5e7eb;
   padding: 6px 8px;
   border-radius: 6px;
   font-size: 12px;
@@ -127,11 +117,7 @@ svg {
 
   <div id="filters">
     <strong>Filtros</strong><br>
-    <label><input type="checkbox" checked data-filter="tablero"> Tableros</label><br>
-    <label><input type="checkbox" checked data-filter="emergencia"> Emergencia</label><br>
-    <label><input type="checkbox" checked data-filter="extintor"> Extintores</label><br>
-    <label><input type="checkbox" checked data-filter="ups"> UPS</label><br>
-    <label><input type="checkbox" checked data-filter="hvac"> HVAC</label>
+    <label><input type="checkbox" checked data-filter="tablero"> Tableros</label>
   </div>
 
   <div id="zoom-controls">
@@ -150,6 +136,12 @@ svg {
 </div>
 
 <script>
+/* ================= CONFIG MAPA ================= */
+const MAP_WIDTH = 800;
+const MAP_HEIGHT = 500;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 4;
+
 /* ================= TABLEROS ================= */
 const tableros = [
   { id: "TAB-01-D5", nombre: "Tablero Línea D5", x: 385, y: 300 },
@@ -163,9 +155,12 @@ const svg = document.getElementById("map");
 const info = document.getElementById("info");
 const tooltip = document.getElementById("tooltip");
 const layerTableros = document.getElementById("layer-tableros");
-let selected = null;
 
-/* ================= RENDER ================= */
+let vb = { x: 0, y: 0, w: 800, h: 500 };
+let dragging = false;
+let start = { x: 0, y: 0 };
+
+/* ================= RENDER TABLEROS ================= */
 const iconSize = 15;
 tableros.forEach(tab => {
   const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
@@ -180,68 +175,38 @@ tableros.forEach(tab => {
   img.dataset.type = "Tablero eléctrico";
   img.dataset.info = tab.nombre;
 
+  img.addEventListener("pointerdown", e => {
+    e.stopPropagation();
+    document.querySelectorAll(".asset").forEach(a => a.classList.remove("selected"));
+    img.classList.add("selected");
+    info.innerHTML = `<strong>${tab.id}</strong><br>${tab.nombre}`;
+  });
+
   layerTableros.appendChild(img);
 });
 
-/* ================= INTERACCIÓN ================= */
-document.querySelectorAll(".asset").forEach(a => {
-
-  a.addEventListener("pointerdown", e => {
-    e.stopPropagation();
-    if (selected) selected.classList.remove("selected");
-    a.classList.add("selected");
-    selected = a;
-
-    info.innerHTML = `
-      <strong>${a.dataset.id}</strong><br>
-      ${a.dataset.type}<br><br>
-      ${a.dataset.info}
-    `;
-  });
-
-  a.addEventListener("pointermove", e => {
-    tooltip.style.display = "block";
-    tooltip.style.left = e.clientX + 8 + "px";
-    tooltip.style.top = e.clientY + 8 + "px";
-    tooltip.innerHTML = `
-      <strong>${a.dataset.id}</strong><br>
-      ${a.dataset.type}<br>
-      ${a.dataset.info}
-    `;
-  });
-
-  a.addEventListener("pointerleave", () => {
-    tooltip.style.display = "none";
-  });
-});
-
-/* ================= FILTROS ================= */
-document.querySelectorAll("[data-filter]").forEach(f => {
-  f.addEventListener("change", () => {
-    document.querySelectorAll("." + f.dataset.filter)
-      .forEach(el => el.style.display = f.checked ? "block" : "none");
-  });
-});
-
-/* ================= ZOOM / PAN (PC + TOUCH) ================= */
-let vb = { x: 0, y: 0, w: 800, h: 500 };
-const zoomStep = 0.2;
-let dragging = false;
-let start = { x: 0, y: 0 };
+/* ================= VIEWBOX ================= */
+function clampViewBox() {
+  vb.w = Math.max(MAP_WIDTH / MAX_ZOOM, Math.min(MAP_WIDTH / MIN_ZOOM, vb.w));
+  vb.h = vb.w * MAP_HEIGHT / MAP_WIDTH;
+  vb.x = Math.max(0, Math.min(MAP_WIDTH - vb.w, vb.x));
+  vb.y = Math.max(0, Math.min(MAP_HEIGHT - vb.h, vb.y));
+}
 
 function updateVB() {
+  clampViewBox();
   svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
 }
 
+/* ================= PAN (1 DEDO) ================= */
 svg.addEventListener("pointerdown", e => {
   dragging = true;
   start.x = e.clientX;
   start.y = e.clientY;
-  svg.style.cursor = "grabbing";
 });
 
 window.addEventListener("pointermove", e => {
-  if (!dragging) return;
+  if (!dragging || pointers.size > 1) return;
   const dx = (start.x - e.clientX) * (vb.w / svg.clientWidth);
   const dy = (start.y - e.clientY) * (vb.h / svg.clientHeight);
   vb.x += dx;
@@ -251,20 +216,18 @@ window.addEventListener("pointermove", e => {
   updateVB();
 });
 
-window.addEventListener("pointerup", () => {
-  dragging = false;
-  svg.style.cursor = "grab";
-});
+window.addEventListener("pointerup", () => dragging = false);
 
+/* ================= BOTONES ZOOM ================= */
 document.getElementById("zoom-in").onclick = () => {
-  vb.w *= 1 - zoomStep;
-  vb.h *= 1 - zoomStep;
+  vb.w *= 0.8;
+  vb.h *= 0.8;
   updateVB();
 };
 
 document.getElementById("zoom-out").onclick = () => {
-  vb.w *= 1 + zoomStep;
-  vb.h *= 1 + zoomStep;
+  vb.w *= 1.25;
+  vb.h *= 1.25;
   updateVB();
 };
 
@@ -273,60 +236,41 @@ document.getElementById("zoom-reset").onclick = () => {
   updateVB();
 };
 
-
-
-/* ================= PINCH TO ZOOM (iPad / Touch) ================= */
+/* ================= PINCH ZOOM (2 DEDOS iPAD) ================= */
 let pointers = new Map();
-let lastPinchDistance = null;
+let lastDistance = null;
 
-svg.addEventListener("pointerdown", e => {
-  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-});
-
-svg.addEventListener("pointerup", e => {
-  pointers.delete(e.pointerId);
-  lastPinchDistance = null;
-});
-
-svg.addEventListener("pointercancel", e => {
-  pointers.delete(e.pointerId);
-  lastPinchDistance = null;
-});
+svg.addEventListener("pointerdown", e => pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }));
+svg.addEventListener("pointerup", e => { pointers.delete(e.pointerId); lastDistance = null; });
+svg.addEventListener("pointercancel", () => { pointers.clear(); lastDistance = null; });
 
 svg.addEventListener("pointermove", e => {
   if (!pointers.has(e.pointerId)) return;
-
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size !== 2) return;
 
-  // PINCH con 2 dedos
-  if (pointers.size === 2) {
-    const pts = Array.from(pointers.values());
-    const dx = pts[0].x - pts[1].x;
-    const dy = pts[0].y - pts[1].y;
-    const distance = Math.hypot(dx, dy);
+  const pts = Array.from(pointers.values());
+  const dx = pts[0].x - pts[1].x;
+  const dy = pts[0].y - pts[1].y;
+  const dist = Math.hypot(dx, dy);
 
-    if (lastPinchDistance) {
-      const zoomFactor = lastPinchDistance / distance;
+  if (!lastDistance) { lastDistance = dist; return; }
 
-      const rect = svg.getBoundingClientRect();
-      const cx = ((pts[0].x + pts[1].x) / 2 - rect.left) / rect.width * vb.w + vb.x;
-      const cy = ((pts[0].y + pts[1].y) / 2 - rect.top) / rect.height * vb.h + vb.y;
+  let factor = lastDistance / dist;
+  factor = Math.min(1.08, Math.max(0.92, factor));
 
-      vb.w *= zoomFactor;
-      vb.h *= zoomFactor;
-      vb.x = cx - vb.w / 2;
-      vb.y = cy - vb.h / 2;
+  const rect = svg.getBoundingClientRect();
+  const cx = ((pts[0].x + pts[1].x) / 2 - rect.left) / rect.width * vb.w + vb.x;
+  const cy = ((pts[0].y + pts[1].y) / 2 - rect.top) / rect.height * vb.h + vb.y;
 
-      updateVB();
-    }
+  vb.w *= factor;
+  vb.x = cx - vb.w / 2;
+  vb.y = cy - vb.h / 2;
 
-    lastPinchDistance = distance;
-  }
+  updateVB();
+  lastDistance = dist;
 });
-
-
 </script>
 
 </body>
 </html>
-``
